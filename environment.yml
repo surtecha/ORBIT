@@ -1,0 +1,13 @@
+name: orbit-app
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - PySide6==6.11.2
+      - geopandas==1.2.0
+      - matplotlib==3.11.2
+      - numpy==2.5.3
+      - pandas==3.0.6
+      - requests==2.34.2
+      - sgp4==2.27
+      - skyfield==1.55
