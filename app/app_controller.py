@@ -1,6 +1,8 @@
 from ui.main_window import MainWindow
 from backend.controllers.tle_controller import TLEController
 from backend.controllers.login_controller import LoginController
+from backend.controllers.propagator_controller import PropagatorController
+from backend.controllers.ground_trace_controller import GroundTraceController
 
 
 class AppController:
@@ -8,62 +10,51 @@ class AppController:
         self.main_window = MainWindow()
         self.tle_controller = TLEController()
         self.login_controller = LoginController(self.main_window)
-        
-        from backend.controllers.propagator_controller import PropagatorController
         self.propagator_controller = PropagatorController(self.tle_controller)
-        
-        from backend.controllers.ground_trace_controller import GroundTraceController
         self.ground_trace_controller = GroundTraceController(self.tle_controller)
-
         self._connect_signals()
         self._update_login_menu()
 
     def _connect_signals(self):
-        # TLE loading signals
-        self.main_window.load_tle_requested.connect(self.tle_controller.load_tle)
-        self.main_window.load_spacetrack_tle_requested.connect(self.tle_controller.load_spacetrack_tle)
-        self.main_window.rename_requested.connect(self.tle_controller.rename_satellite)
-        self.main_window.table_requested.connect(self.tle_controller.get_satellite_data)
-        self.main_window.plot_requested.connect(self.tle_controller.get_satellite_plot_data)
-        self.main_window.delete_requested.connect(self.tle_controller.delete_satellite)
-        self.main_window.export_csv_requested.connect(self.tle_controller.export_csv)
-        self.main_window.export_tle_requested.connect(self.tle_controller.export_tle)
-
-        self.tle_controller.satellite_added.connect(self.main_window.add_satellite_to_sidebar)
-        self.tle_controller.satellite_renamed.connect(self.main_window.update_satellite_name)
-        self.tle_controller.satellite_removed.connect(self.main_window.remove_satellite)
-        self.tle_controller.satellite_data_ready.connect(self.main_window.show_satellite_table)
-        self.tle_controller.satellite_plot_ready.connect(self.main_window.show_satellite_plot)
-        
-        self.main_window.propagate_requested.connect(self.propagator_controller.propagate_satellite)
+        window, tle = self.main_window, self.tle_controller
+        for signal, slot in (
+            (window.load_tle_requested, tle.load_tle),
+            (window.load_spacetrack_tle_requested, tle.load_spacetrack_tle),
+            (window.rename_requested, tle.rename_satellite),
+            (window.table_requested, tle.get_satellite_data),
+            (window.plot_requested, tle.get_satellite_plot_data),
+            (window.delete_requested, tle.delete_satellite),
+            (window.export_csv_requested, tle.export_csv),
+            (window.export_tle_requested, tle.export_tle),
+            (tle.satellite_added, window.add_satellite_to_sidebar),
+            (tle.satellite_renamed, window.update_satellite_name),
+            (tle.satellite_removed, window.remove_satellite),
+            (tle.satellite_data_ready, window.show_satellite_table),
+            (tle.satellite_plot_ready, window.show_satellite_plot),
+            (tle.busy_changed, window.set_import_busy),
+            (window.propagate_requested, self.propagator_controller.propagate_satellite),
+            (window.ground_trace_requested, self.ground_trace_controller.initiate_ground_trace),
+            (window.login_action.triggered, self.login_controller.handle_login_click),
+            (window.logout_action.triggered, self.login_controller.handle_logout_click),
+            (window.authentication_lost, self.login_controller.on_authentication_lost),
+        ):
+            signal.connect(slot)
+        for controller in (tle, self.propagator_controller, self.ground_trace_controller):
+            controller.operation_failed.connect(window.show_error)
         self.propagator_controller.propagation_data_ready.connect(
-            lambda sat_id, name, data: self.main_window.show_satellite_propagator(
-                sat_id, name, data, self.propagator_controller
-            )
-        )
-        
-        self.main_window.ground_trace_requested.connect(self.ground_trace_controller.initiate_ground_trace)
+            lambda satellite_id, name, data: window.show_satellite_propagator(satellite_id, name, data, self.propagator_controller))
         self.ground_trace_controller.ground_trace_data_ready.connect(
-            lambda sat_id, name, data: self.main_window.show_satellite_ground_trace(
-                sat_id, name, data, self.ground_trace_controller
-            )
-        )
-        
-        self.main_window.login_action.triggered.connect(self.login_controller.handle_login_click)
-        self.main_window.logout_action.triggered.connect(self.login_controller.handle_logout_click)
+            lambda satellite_id, name, data: window.show_satellite_ground_trace(satellite_id, name, data, self.ground_trace_controller))
         self.login_controller.login_status_changed.connect(self._on_login_status_changed)
-    
+        window.closing.connect(self.login_controller.shutdown)
+        window.closing.connect(tle.shutdown)
+
     def _update_login_menu(self):
-        """Update login menu state based on current login status."""
-        self.login_controller.update_menu_state(
-            self.main_window.login_action,
-            self.main_window.logout_action,
-            self.main_window.insert_spacetrack
-        )
-    
+        self.login_controller.update_menu_state(self.main_window.login_action, self.main_window.logout_action,
+                                                self.main_window.insert_spacetrack)
+
     def _on_login_status_changed(self, logged_in):
-        """Handle login status changes."""
         self._update_login_menu()
 
     def show(self):
-        self.main_window.show()
+        self.main_window.showMaximized()

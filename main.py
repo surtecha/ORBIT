@@ -1,18 +1,27 @@
 import sys
+from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from app.app_controller import AppController
-from backend.utils.map_loader import MapLoader
+from backend.utils.file_handler import WorkerThread
+from backend.utils.spacetrack import clear_cached_session
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setApplicationName("ORBITT")
-    app.setOrganizationName("ORBITT")
-    app.setWindowIcon(QIcon("assets/icon.png"))
 
-    map_loader = MapLoader()
-    map_loader.load_world_map()
-
+def main():
+    application = QApplication(sys.argv)
+    application.setApplicationName('ORBITT')
+    application.setOrganizationName('ORBITT')
+    application.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / 'assets' / 'icon.png')))
     controller = AppController()
     controller.show()
-    sys.exit(app.exec())
+    try:
+        return application.exec()
+    finally:
+        WorkerThread.cancel_all()
+        for worker in tuple(WorkerThread.active):
+            worker.wait()
+        clear_cached_session()
+
+
+if __name__ == '__main__':
+    sys.exit(main())
